@@ -1,0 +1,801 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>遊戲大廳 - 多合一遊戲精選</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700&display=swap');
+
+        :root {
+            --primary: #94a3b8;
+            --bg-base: #f8fafc;
+            --text-base: #1e293b;
+            --card-bg: rgba(255, 255, 255, 0.9);
+            --game-board: #e2e8f0;
+            --accent: #64748b;
+        }
+
+        body {
+            font-family: 'Noto Sans TC', sans-serif;
+            margin: 0;
+            overflow: hidden;
+            background: var(--bg-base);
+            color: var(--text-base);
+            transition: all 0.5s ease;
+            height: 100vh;
+            width: 100vw;
+        }
+
+        #bg-canvas, #fx-canvas {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            pointer-events: none;
+        }
+
+        #bg-canvas { z-index: -1; }
+        #fx-canvas { z-index: 999; }
+
+        .page {
+            display: none;
+            height: 100vh;
+            width: 100vw;
+            padding: 20px;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            animation: fadeIn 0.4s ease-out;
+        }
+
+        .page.active { display: flex; }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: scale(0.98); }
+            to { opacity: 1; transform: scale(1); }
+        }
+
+        .game-card {
+            background: var(--card-bg);
+            border-radius: 1.5rem;
+            padding: 2rem;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            cursor: pointer;
+            border: 1px solid rgba(0,0,0,0.05);
+            text-align: center;
+            backdrop-filter: blur(8px);
+        }
+
+        .game-card:hover {
+            transform: translateY(-8px);
+            background: white;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+        }
+
+        .game-panel {
+            background: var(--card-bg);
+            padding: 2rem;
+            border-radius: 2rem;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255,255,255,0.2);
+            color: var(--text-base);
+        }
+
+        /* 2048 自定義色系 */
+        .grid-2048 {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+            background: var(--game-board);
+            padding: 10px;
+            border-radius: 12px;
+            width: 320px;
+            height: 320px;
+        }
+        .cell-2048 {
+            width: 65px; height: 65px;
+            background: rgba(0,0,0,0.1);
+            border-radius: 8px;
+            display: flex; align-items: center; justify-content: center;
+            font-weight: bold; font-size: 22px;
+            transition: all 0.15s ease;
+        }
+
+        /* 五子棋盤 */
+        .gomoku-board {
+            display: grid;
+            background: var(--game-board);
+            border: 4px solid var(--accent);
+            border-radius: 4px;
+        }
+        .gomoku-cell {
+            border: 0.5px solid rgba(0,0,0,0.1);
+            cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .piece { width: 85%; height: 85%; border-radius: 50%; transition: transform 0.2s; }
+        .piece.black { background: #1a1a1a; box-shadow: 0 2px 4px rgba(0,0,0,0.4); }
+        .piece.white { background: #fdfdfd; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
+
+        /* 推盤樣式 */
+        .puzzle-grid {
+            display: grid; grid-template-columns: repeat(3, 1fr);
+            gap: 8px; width: 300px; height: 300px;
+        }
+        .puzzle-tile {
+            background: var(--primary);
+            color: white;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 2rem; font-weight: bold;
+            border-radius: 12px; cursor: pointer;
+            box-shadow: 0 4px 0 rgba(0,0,0,0.1);
+        }
+        .puzzle-tile.empty { background: transparent; box-shadow: none; }
+
+        /* 記憶翻牌 */
+        .memory-grid {
+            display: grid; grid-template-columns: repeat(4, 1fr);
+            gap: 12px; width: 340px;
+        }
+        .memory-card {
+            aspect-ratio: 1;
+            background: var(--primary);
+            border-radius: 12px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 2.2rem; cursor: pointer;
+            transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            transform-style: preserve-3d;
+        }
+        .memory-card.flipped { transform: rotateY(180deg); background: white; border: 2px solid var(--primary); }
+
+        /* 下拉選單 */
+        .custom-select {
+            background: rgba(255,255,255,0.15);
+            border: 1px solid rgba(255,255,255,0.3);
+            color: inherit;
+            padding: 8px 16px;
+            border-radius: 99px;
+            cursor: pointer;
+            outline: none;
+        }
+        .custom-select option { color: #333; }
+
+        .btn-back {
+            position: absolute; top: 2rem; left: 2rem;
+            padding: 0.5rem 1.5rem; border-radius: 99px;
+            background: var(--card-bg); color: var(--text-base);
+            border: 1px solid rgba(0,0,0,0.1); font-weight: bold;
+            z-index: 100;
+        }
+
+        #win-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.4);
+            backdrop-filter: blur(4px);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            color: white;
+            animation: fadeIn 0.5s ease;
+        }
+    </style>
+</head>
+<body>
+
+    <canvas id="bg-canvas"></canvas>
+    <canvas id="fx-canvas"></canvas>
+
+    <!-- 勝利慶祝彈窗 -->
+    <div id="win-overlay" onclick="closeWinOverlay()">
+        <h2 id="win-title" class="text-6xl font-black mb-4 drop-shadow-lg text-center">太強了！</h2>
+        <p id="win-subtitle" class="text-2xl mb-8 opacity-90">點擊任意處繼續</p>
+        <div class="px-8 py-4 bg-white text-black rounded-full font-bold text-xl shadow-2xl hover:scale-110 transition cursor-pointer">繼續冒險</div>
+    </div>
+
+    <!-- 主選單 -->
+    <div id="main-menu" class="page active">
+        <div class="mb-12 text-center">
+            <h1 class="text-6xl font-bold mb-6 tracking-tight">遊戲大廳</h1>
+            <div class="flex flex-wrap gap-6 justify-center items-center font-medium">
+                <div class="flex items-center gap-3">
+                    <span>風格主題：</span>
+                    <select id="theme-selector" class="custom-select">
+                        <option value="minimal">極簡白 (莫蘭迪)</option>
+                        <option value="forest">晨曦森林</option>
+                        <option value="sakura">落櫻繽紛</option>
+                        <option value="stars">星塵宇宙</option>
+                        <option value="deepsea">深海探險</option>
+                    </select>
+                </div>
+                <div class="flex items-center gap-3">
+                    <span>背景音樂：</span>
+                    <select id="music-selector" class="custom-select">
+                        <option value="none">無 (關閉)</option>
+                        <option value="lofi">LOFI 療癒</option>
+                        <option value="retro">復古遊戲 (8-bit)</option>
+                        <option value="piano">優雅鋼琴</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-8 max-w-7xl w-full px-8">
+            <div class="game-card" onclick="startGame('flood')">
+                <div class="text-5xl mb-4">🎨</div>
+                <h3 class="text-xl font-bold mb-2">Color Flood</h3>
+                <p class="text-sm opacity-60">勝場紀錄: <span id="score-flood">0</span></p>
+            </div>
+            <div class="game-card" onclick="startGame('2048')">
+                <div class="text-5xl mb-4">🔢</div>
+                <h3 class="text-xl font-bold mb-2">2048</h3>
+                <p class="text-sm opacity-60">最高紀錄: <span id="score-2048">0</span></p>
+            </div>
+            <div class="game-card" onclick="startGame('gomoku')">
+                <div class="text-5xl mb-4">⚔️</div>
+                <h3 class="text-xl font-bold mb-2">五子對弈</h3>
+                <p class="text-sm opacity-60">勝場: <span id="score-gomoku">0</span></p>
+            </div>
+            <div class="game-card" onclick="startGame('puzzle')">
+                <div class="text-5xl mb-4">🧩</div>
+                <h3 class="text-xl font-bold mb-2">數字推盤</h3>
+                <p class="text-sm opacity-60">最佳紀錄: <span id="score-puzzle">--</span></p>
+            </div>
+            <div class="game-card" onclick="startGame('memory')">
+                <div class="text-5xl mb-4">💎</div>
+                <h3 class="text-xl font-bold mb-2">記憶翻牌</h3>
+                <p class="text-sm opacity-60">最佳紀錄: <span id="score-memory">--</span></p>
+            </div>
+        </div>
+    </div>
+
+    <!-- 遊戲容器 -->
+    <div id="game-flood" class="page">
+        <button class="btn-back" onclick="backToMenu()">← 返回</button>
+        <div class="game-panel flex flex-col items-center">
+            <h2 class="text-3xl font-bold mb-2">Color Flood</h2>
+            <div class="mb-4 text-xl">剩餘步數：<span id="flood-steps" class="font-bold">30</span></div>
+            <canvas id="flood-canvas" width="320" height="320"></canvas>
+            <div id="flood-btns" class="flex gap-3 mt-6"></div>
+        </div>
+    </div>
+
+    <div id="game-2048" class="page">
+        <button class="btn-back" onclick="backToMenu()">← 返回</button>
+        <div class="game-panel">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-3xl font-bold">2048</h2>
+                <div class="text-right">
+                    <div class="text-sm opacity-60 uppercase font-bold">Score</div>
+                    <div id="now-2048" class="text-2xl font-bold">0</div>
+                </div>
+            </div>
+            <div id="grid-2048" class="grid-2048"></div>
+        </div>
+    </div>
+
+    <div id="game-gomoku" class="page">
+        <button class="btn-back" onclick="backToMenu()">← 返回</button>
+        <div class="game-panel flex flex-col items-center">
+            <h2 class="text-3xl font-bold mb-4">五子對弈 (10x10)</h2>
+            <div class="mb-6 flex gap-4">
+                <select id="gomoku-mode" class="p-2 rounded border bg-white/50">
+                    <option value="pvc">單人 (挑戰電腦)</option>
+                    <option value="pvp">雙人對戰</option>
+                </select>
+                <button class="px-6 py-2 bg-blue-500 text-white rounded-full font-bold shadow-lg" onclick="resetGomoku()">重新對局</button>
+            </div>
+            <div id="gomoku-board" class="gomoku-board"></div>
+            <div id="gomoku-status" class="mt-6 text-xl font-medium">輪到：黑棋</div>
+        </div>
+    </div>
+
+    <div id="game-puzzle" class="page">
+        <button class="btn-back" onclick="backToMenu()">← 返回</button>
+        <div class="game-panel flex flex-col items-center">
+            <h2 class="text-3xl font-bold mb-6">數字推盤</h2>
+            <div id="puzzle-grid" class="puzzle-grid"></div>
+            <button class="mt-8 px-8 py-3 bg-indigo-500 text-white rounded-full font-bold" onclick="initPuzzle()">重新洗牌</button>
+        </div>
+    </div>
+
+    <div id="game-memory" class="page">
+        <button class="btn-back" onclick="backToMenu()">← 返回</button>
+        <div class="game-panel flex flex-col items-center">
+            <h2 class="text-3xl font-bold mb-4">記憶翻牌</h2>
+            <div class="mb-6 text-2xl">⏳ <span id="memory-time">0</span>s</div>
+            <div id="memory-grid" class="memory-grid"></div>
+        </div>
+    </div>
+
+    <script>
+        /** --- 配置與色彩主題系統 --- **/
+        const themes = {
+            minimal: {
+                primary: '#94a3b8', bg: '#f1f5f9', text: '#1e293b', board: '#cbd5e1', accent: '#64748b',
+                flood: ['#94a3b8', '#a5b4fc', '#fca5a5', '#fde68a', '#99f6e4', '#e9d5ff']
+            },
+            forest: {
+                primary: '#10b981', bg: '#064e3b', text: '#ecfdf5', board: '#065f46', accent: '#34d399',
+                flood: ['#059669', '#10b981', '#34d399', '#6ee7b7', '#047857', '#064e3b']
+            },
+            sakura: {
+                primary: '#fb7185', bg: '#fff1f2', text: '#881337', board: '#fecdd3', accent: '#fb7185',
+                flood: ['#fb7185', '#f43f5e', '#e11d48', '#fda4af', '#fce7f3', '#db2777']
+            },
+            stars: {
+                primary: '#6366f1', bg: '#020617', text: '#f8fafc', board: '#1e1b4b', accent: '#818cf8',
+                flood: ['#312e81', '#4338ca', '#6366f1', '#818cf8', '#a5b4fc', '#c7d2fe']
+            },
+            deepsea: {
+                primary: '#0ea5e9', bg: '#082f49', text: '#e0f2fe', board: '#0c4a6e', accent: '#38bdf8',
+                flood: ['#0369a1', '#0ea5e9', '#38bdf8', '#7dd3fc', '#bae6fd', '#0c4a6e']
+            }
+        };
+
+        let currentTheme = 'minimal';
+        let currentMusic = 'none';
+        const bgCanvas = document.getElementById('bg-canvas');
+        const bgCtx = bgCanvas.getContext('2d');
+        const fxCanvas = document.getElementById('fx-canvas');
+        const fxCtx = fxCanvas.getContext('2d');
+        let particles = [];
+        let confetti = [];
+
+        /** --- 音樂合成系統 (Web Audio API) --- **/
+        let audioCtx = null;
+        let mainGain = null;
+        let musicLoopId = null;
+
+        function initAudio() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                mainGain = audioCtx.createGain();
+                mainGain.connect(audioCtx.destination);
+                mainGain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+            }
+        }
+
+        const scales = {
+            lofi: [261.63, 293.66, 329.63, 349.23, 392.00, 440.00], // C Maj
+            retro: [130.81, 146.83, 164.81, 196.00, 220.00], // Low Pentatonic
+            piano: [261.63, 311.13, 349.23, 392.00, 466.16] // Cm7
+        };
+
+        function playNote(freq, type = 'sine', duration = 0.5, volume = 0.1) {
+            if (!audioCtx) return;
+            const osc = audioCtx.createOscillator();
+            const g = audioCtx.createGain();
+            osc.type = type;
+            osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+            g.gain.setValueAtTime(volume, audioCtx.currentTime);
+            g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + duration);
+            osc.connect(g);
+            g.connect(mainGain);
+            osc.start();
+            osc.stop(audioCtx.currentTime + duration);
+        }
+
+        function musicLoop() {
+            if (currentMusic === 'none') return;
+            
+            const scale = scales[currentMusic];
+            const note = scale[Math.floor(Math.random() * scale.length)];
+            
+            if (currentMusic === 'lofi') {
+                playNote(note, 'triangle', 2, 0.05);
+                musicLoopId = setTimeout(musicLoop, 1500);
+            } else if (currentMusic === 'retro') {
+                playNote(note, 'square', 0.2, 0.03);
+                musicLoopId = setTimeout(musicLoop, 200);
+            } else if (currentMusic === 'piano') {
+                playNote(note, 'sine', 3, 0.08);
+                playNote(note * 0.5, 'sine', 4, 0.02); // Bass
+                musicLoopId = setTimeout(musicLoop, 1000);
+            }
+        }
+
+        function switchMusic(type) {
+            initAudio();
+            currentMusic = type;
+            clearTimeout(musicLoopId);
+            if (type !== 'none') {
+                if (audioCtx.state === 'suspended') audioCtx.resume();
+                musicLoop();
+            }
+        }
+
+        /** --- 主題與 UI 邏輯 --- **/
+        function updateUITheme() {
+            const config = themes[currentTheme];
+            const root = document.documentElement;
+            root.style.setProperty('--primary', config.primary);
+            root.style.setProperty('--bg-base', config.bg);
+            root.style.setProperty('--text-base', config.text);
+            root.style.setProperty('--game-board', config.board);
+            root.style.setProperty('--accent', config.accent);
+            root.style.setProperty('--card-bg', currentTheme === 'minimal' ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.15)');
+            initBackground();
+        }
+
+        function triggerWinEffect(title = "太強了！") {
+            const config = themes[currentTheme];
+            const overlay = document.getElementById('win-overlay');
+            document.getElementById('win-title').innerText = title;
+            overlay.style.display = 'flex';
+            
+            const colors = [config.primary, config.accent, '#ffffff'];
+            for (let i = 0; i < 150; i++) {
+                confetti.push({
+                    x: window.innerWidth / 2,
+                    y: window.innerHeight / 2,
+                    vx: (Math.random() - 0.5) * 20,
+                    vy: (Math.random() - 0.5) * 20 - 5,
+                    size: Math.random() * 8 + 4,
+                    color: colors[Math.floor(Math.random() * colors.length)],
+                    rotation: Math.random() * 360,
+                    rSpeed: Math.random() * 10 - 5,
+                    opacity: 1,
+                    life: 1
+                });
+            }
+            // 贏球時發出一聲響亮的音效
+            if(audioCtx) playNote(523.25, 'triangle', 1, 0.2); // C5
+        }
+
+        function closeWinOverlay() {
+            document.getElementById('win-overlay').style.display = 'none';
+        }
+
+        function updateConfetti() {
+            fxCtx.clearRect(0, 0, fxCanvas.width, fxCanvas.height);
+            for (let i = confetti.length - 1; i >= 0; i--) {
+                const p = confetti[i];
+                p.x += p.vx; p.y += p.vy;
+                p.vy += 0.3; p.vx *= 0.98;
+                p.rotation += p.rSpeed; p.life -= 0.01;
+                if (p.life <= 0) { confetti.splice(i, 1); continue; }
+                fxCtx.save();
+                fxCtx.translate(p.x, p.y);
+                fxCtx.rotate(p.rotation * Math.PI / 180);
+                fxCtx.globalAlpha = p.life;
+                fxCtx.fillStyle = p.color;
+                fxCtx.fillRect(-p.size/2, -p.size/2, p.size, p.size);
+                fxCtx.restore();
+            }
+        }
+
+        function initBackground() {
+            bgCanvas.width = window.innerWidth;
+            bgCanvas.height = window.innerHeight;
+            fxCanvas.width = window.innerWidth;
+            fxCanvas.height = window.innerHeight;
+            particles = [];
+            for(let i=0; i<60; i++) {
+                particles.push({
+                    x: Math.random() * bgCanvas.width,
+                    y: Math.random() * bgCanvas.height,
+                    vx: (Math.random() - 0.5) * 0.5,
+                    vy: Math.random() * 0.5 + 0.2,
+                    size: Math.random() * 4 + 1,
+                    opacity: Math.random() * 0.5 + 0.1
+                });
+            }
+        }
+
+        function drawLoop() {
+            const config = themes[currentTheme];
+            bgCtx.fillStyle = config.bg;
+            bgCtx.fillRect(0, 0, bgCanvas.width, bgCanvas.height);
+            bgCtx.fillStyle = config.accent;
+            particles.forEach(p => {
+                bgCtx.globalAlpha = p.opacity;
+                bgCtx.beginPath();
+                if (currentTheme === 'sakura') bgCtx.ellipse(p.x, p.y, p.size*1.5, p.size, p.x/50, 0, Math.PI*2);
+                else if (currentTheme === 'deepsea') { bgCtx.arc(p.x, p.y, p.size, 0, Math.PI*2); p.vy = -Math.abs(p.vy); }
+                else bgCtx.arc(p.x, p.y, p.size, 0, Math.PI*2);
+                bgCtx.fill();
+                p.x += p.vx; p.y += p.vy;
+                if(p.y > bgCanvas.height) p.y = -10;
+                if(p.y < -10) p.y = bgCanvas.height;
+                if(p.x > bgCanvas.width) p.x = 0;
+                if(p.x < 0) p.x = bgCanvas.width;
+            });
+            bgCtx.globalAlpha = 1;
+            updateConfetti();
+            requestAnimationFrame(drawLoop);
+        }
+
+        /** --- 導航與遊戲邏輯 (保留原功能) --- **/
+        function startGame(id) {
+            document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+            const targetPage = document.getElementById('game-' + id);
+            if (targetPage) targetPage.classList.add('active');
+            
+            if(id === 'flood') initFlood();
+            if(id === '2048') init2048();
+            if(id === 'gomoku') resetGomoku();
+            if(id === 'puzzle') initPuzzle();
+            if(id === 'memory') initMemory();
+        }
+
+        function backToMenu() {
+            document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+            document.getElementById('main-menu').classList.add('active');
+            loadHighScores();
+            closeWinOverlay();
+        }
+
+        /** --- Color Flood --- **/
+        let floodGrid = [];
+        let floodSteps = 30;
+        function initFlood() {
+            floodSteps = 30;
+            document.getElementById('flood-steps').innerText = floodSteps;
+            const cols = themes[currentTheme].flood;
+            floodGrid = Array.from({length: 14}, () => Array.from({length: 14}, () => Math.floor(Math.random()*cols.length)));
+            const btnContainer = document.getElementById('flood-btns');
+            btnContainer.innerHTML = '';
+            cols.forEach((c, i) => {
+                const b = document.createElement('div');
+                b.className = 'w-10 h-10 rounded-full border-2 border-white/50 cursor-pointer transition transform hover:scale-110';
+                b.style.backgroundColor = c;
+                b.onclick = () => floodAction(i);
+                b.onmouseenter = () => renderFlood(i);
+                b.onmouseleave = () => renderFlood();
+                btnContainer.appendChild(b);
+            });
+            renderFlood();
+        }
+        function renderFlood(previewIdx = -1) {
+            const size = 320 / 14;
+            const cols = themes[currentTheme].flood;
+            let display = JSON.parse(JSON.stringify(floodGrid));
+            const floodCanvas = document.getElementById('flood-canvas');
+            const fCtx = floodCanvas.getContext('2d');
+            if(previewIdx !== -1) {
+                const target = floodGrid[0][0];
+                const queue = [[0,0]]; const seen = new Set(['0,0']);
+                while(queue.length) {
+                    const [x,y] = queue.shift();
+                    display[y][x] = previewIdx;
+                    [[0,1],[0,-1],[1,0],[-1,0]].forEach(([dx,dy]) => {
+                        const nx=x+dx, ny=y+dy;
+                        if(nx>=0 && nx<14 && ny>=0 && ny<14 && !seen.has(`${nx},${ny}`) && floodGrid[ny][nx] === target) {
+                            seen.add(`${nx},${ny}`); queue.push([nx,ny]);
+                        }
+                    });
+                }
+            }
+            for(let y=0; y<14; y++) for(let x=0; x<14; x++) {
+                fCtx.fillStyle = cols[display[y][x]];
+                fCtx.fillRect(x*size, y*size, size, size);
+            }
+        }
+        function floodAction(idx) {
+            const target = floodGrid[0][0];
+            if(target === idx || floodSteps <= 0) return;
+            const queue = [[0,0]]; const seen = new Set(['0,0']);
+            while(queue.length) {
+                const [x,y] = queue.shift();
+                floodGrid[y][x] = idx;
+                [[0,1],[0,-1],[1,0],[-1,0]].forEach(([dx,dy]) => {
+                    const nx=x+dx, ny=y+dy;
+                    if(nx>=0 && nx<14 && ny>=0 && ny<14 && !seen.has(`${nx},${ny}`) && floodGrid[ny][nx] === target) {
+                        seen.add(`${nx},${ny}`); queue.push([nx,ny]);
+                    }
+                });
+            }
+            floodSteps--;
+            document.getElementById('flood-steps').innerText = floodSteps;
+            renderFlood();
+            if(floodGrid.every(r => r.every(c => c === idx))) {
+                localStorage.setItem('hs-flood', (parseInt(localStorage.getItem('hs-flood')||0)+1));
+                triggerWinEffect("色彩大師！");
+            } else if(floodSteps === 0) alert("步數用完囉！");
+        }
+
+        /** --- 2048 --- **/
+        let board2048 = [];
+        let score2048 = 0;
+        let win2048Triggered = false;
+        function init2048() {
+            board2048 = Array(16).fill(0);
+            score2048 = 0; win2048Triggered = false;
+            addTile2048(); addTile2048();
+            render2048();
+        }
+        function addTile2048() {
+            const empty = board2048.map((v, i) => v === 0 ? i : null).filter(v => v !== null);
+            if(empty.length) board2048[empty[Math.floor(Math.random()*empty.length)]] = Math.random() < 0.9 ? 2 : 4;
+        }
+        function render2048() {
+            const container = document.getElementById('grid-2048');
+            if(!container) return;
+            container.innerHTML = '';
+            board2048.forEach(v => {
+                const cell = document.createElement('div');
+                cell.className = 'cell-2048';
+                cell.innerText = v || '';
+                if(v) {
+                    const power = Math.log2(v);
+                    cell.style.background = `hsl(${200 + power * 20}, 70%, ${90 - power * 5}%)`;
+                    cell.style.color = themes[currentTheme].text;
+                    if(v === 2048 && !win2048Triggered) { win2048Triggered = true; triggerWinEffect("2048 達成！"); }
+                }
+                container.appendChild(cell);
+            });
+            document.getElementById('now-2048').innerText = score2048;
+        }
+        window.addEventListener('keydown', e => {
+            const p = document.getElementById('game-2048');
+            if(!p || !p.classList.contains('active')) return;
+            if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)) {
+                e.preventDefault();
+                const moved = move2048(e.key.replace('Arrow','').toLowerCase());
+                if(moved) { addTile2048(); render2048(); if(score2048 > (localStorage.getItem('hs-2048')||0)) localStorage.setItem('hs-2048', score2048); }
+            }
+        });
+        function move2048(dir) {
+            let moved = false; const size = 4;
+            for(let i=0; i<size; i++) {
+                let line = [];
+                for(let j=0; j<size; j++) {
+                    let idx = (dir==='up'||dir==='down') ? (j*size+i) : (i*size+j);
+                    if(dir==='down'||dir==='right') idx = (dir==='down') ? ((3-j)*size+i) : (i*size+(3-j));
+                    line.push(board2048[idx]);
+                }
+                let filtered = line.filter(v => v !== 0);
+                for(let j=0; j<filtered.length-1; j++) if(filtered[j] === filtered[j+1]) {
+                    filtered[j] *= 2; score2048 += filtered[j]; filtered.splice(j+1, 1);
+                }
+                while(filtered.length < size) filtered.push(0);
+                for(let j=0; j<size; j++) {
+                    let idx = (dir==='up'||dir==='down') ? (j*size+i) : (i*size+j);
+                    if(dir==='down'||dir==='right') idx = (dir==='down') ? ((3-j)*size+i) : (i*size+(3-j));
+                    if(board2048[idx] !== filtered[j]) moved = true;
+                    board2048[idx] = filtered[j];
+                }
+            }
+            return moved;
+        }
+
+        /** --- 五子棋 --- **/
+        let gomokuBoard = []; let gomokuTurn = 1; let isGomokuOver = false;
+        function resetGomoku() { gomokuBoard = Array(100).fill(0); gomokuTurn = 1; isGomokuOver = false; renderGomoku(); }
+        function renderGomoku() {
+            const b = document.getElementById('gomoku-board');
+            if(!b) return;
+            b.style.gridTemplateColumns = 'repeat(10, 36px)';
+            b.innerHTML = '';
+            gomokuBoard.forEach((v, i) => {
+                const c = document.createElement('div');
+                c.className = 'gomoku-cell w-9 h-9';
+                if(v===1) c.innerHTML = '<div class="piece black"></div>';
+                if(v===2) c.innerHTML = '<div class="piece white"></div>';
+                c.onclick = () => gomokuClick(i);
+                b.appendChild(c);
+            });
+            document.getElementById('gomoku-status').innerText = `輪到：${gomokuTurn === 1 ? '黑棋' : '白棋'}`;
+        }
+        function gomokuClick(i) {
+            if(gomokuBoard[i] || isGomokuOver) return;
+            gomokuBoard[i] = gomokuTurn; renderGomoku();
+            if(checkWin(i)) {
+                isGomokuOver = true; triggerWinEffect(`${gomokuTurn === 1 ? '黑棋' : '白棋'} 獲勝！`);
+                if(gomokuTurn === 1) localStorage.setItem('hs-gomoku', (parseInt(localStorage.getItem('hs-gomoku')||0)+1));
+                return;
+            }
+            gomokuTurn = gomokuTurn === 1 ? 2 : 1;
+            if(gomokuTurn === 2 && document.getElementById('gomoku-mode').value === 'pvc') {
+                setTimeout(() => {
+                    const empty = gomokuBoard.map((v,i)=>v===0?i:null).filter(v=>v!==null);
+                    if(empty.length) gomokuClick(empty[Math.floor(Math.random()*empty.length)]);
+                }, 400);
+            }
+        }
+        function checkWin(idx) {
+            const r = Math.floor(idx/10), c = idx%10;
+            const dirs = [[1,0],[0,1],[1,1],[1,-1]];
+            for(let [dr,dc] of dirs) {
+                let count = 1;
+                for(let i=1; i<5; i++) {
+                    const nr=r+dr*i, nc=c+dc*i;
+                    if(nr>=0 && nr<10 && nc>=0 && nc<10 && gomokuBoard[nr*10+nc] === gomokuTurn) count++; else break;
+                }
+                for(let i=1; i<5; i++) {
+                    const nr=r-dr*i, nc=c-dc*i;
+                    if(nr>=0 && nr<10 && nc>=0 && nc<10 && gomokuBoard[nr*10+nc] === gomokuTurn) count++; else break;
+                }
+                if(count >= 5) return true;
+            }
+            return false;
+        }
+
+        /** --- 數字推盤 --- **/
+        let puzzle = [];
+        function initPuzzle() {
+            puzzle = [1,2,3,4,5,6,7,8,0];
+            for(let i=0; i<200; i++) {
+                const zero = puzzle.indexOf(0); const adjs = [];
+                if(zero%3>0) adjs.push(zero-1); if(zero%3<2) adjs.push(zero+1);
+                if(zero>=3) adjs.push(zero-3); if(zero<6) adjs.push(zero+3);
+                const pick = adjs[Math.floor(Math.random()*adjs.length)];
+                [puzzle[zero], puzzle[pick]] = [puzzle[pick], puzzle[zero]];
+            }
+            renderPuzzle();
+        }
+        function renderPuzzle() {
+            const g = document.getElementById('puzzle-grid'); if(!g) return;
+            g.innerHTML = '';
+            puzzle.forEach((v, i) => {
+                const t = document.createElement('div');
+                t.className = 'puzzle-tile' + (v===0 ? ' empty' : '');
+                t.innerText = v || '';
+                t.onclick = () => {
+                    const zero = puzzle.indexOf(0);
+                    if([zero-1, zero+1, zero-3, zero+3].includes(i)) {
+                        [puzzle[zero], puzzle[i]] = [puzzle[i], puzzle[zero]]; renderPuzzle();
+                        if(puzzle.join(',') === '1,2,3,4,5,6,7,8,0') {
+                            localStorage.setItem('hs-puzzle', 'Clear!'); triggerWinEffect("拼圖高手！");
+                        }
+                    }
+                };
+                g.appendChild(t);
+            });
+        }
+
+        /** --- 記憶翻牌 --- **/
+        let cards = []; let flipped = []; let mTime = 0, mTimer;
+        function initMemory() {
+            const emojis = ['🌸','🦊','🌕','🌊','🔥','🌪️','⚡','🌈'];
+            cards = [...emojis, ...emojis].sort(()=>Math.random()-0.5);
+            flipped = []; mTime = 0; clearInterval(mTimer);
+            mTimer = setInterval(()=> { mTime++; document.getElementById('memory-time').innerText = mTime; }, 1000);
+            const g = document.getElementById('memory-grid'); if(!g) return;
+            g.innerHTML = '';
+            cards.forEach((e, i) => {
+                const c = document.createElement('div');
+                c.className = 'memory-card';
+                c.onclick = () => {
+                    if(flipped.length<2 && !c.classList.contains('flipped')) {
+                        c.classList.add('flipped'); c.innerText = e; flipped.push({el:c, val:e});
+                        if(flipped.length === 2) {
+                            if(flipped[0].val === flipped[1].val) {
+                                flipped = [];
+                                if(document.querySelectorAll('.memory-card.flipped').length === 16) {
+                                    clearInterval(mTimer); localStorage.setItem('hs-memory', mTime + 's');
+                                    triggerWinEffect("記憶之王！");
+                                }
+                            } else {
+                                setTimeout(() => {
+                                    flipped.forEach(f => { f.el.classList.remove('flipped'); f.el.innerText = ''; });
+                                    flipped = [];
+                                }, 600);
+                            }
+                        }
+                    }
+                };
+                g.appendChild(c);
+            });
+        }
+
+        function loadHighScores() {
+            ['flood', '2048', 'gomoku', 'puzzle', 'memory'].forEach(id => {
+                const el = document.getElementById(`score-${id}`);
+                if (el) el.innerText = localStorage.getItem(`hs-${id}`) || (id === 'puzzle' || id === 'memory' ? '--' : '0');
+            });
+        }
+
+        document.getElementById('theme-selector').onchange = (e) => { currentTheme = e.target.value; updateUITheme(); };
+        document.getElementById('music-selector').onchange = (e) => { switchMusic(e.target.value); };
+
+        window.onload = () => { updateUITheme(); drawLoop(); loadHighScores(); };
+        window.onresize = initBackground;
+    </script>
+</body>
+</html>
