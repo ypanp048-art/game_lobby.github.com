@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>極簡時光 | Minimal Interface</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@300;500&family=Inter:wght@300;400&display=swap');
+
+        :root {
+            --bg-color: #fdfdfd;
+            --text-main: #1a1a1a;
+            --text-secondary: #666666;
+            --accent: #000000;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            font-family: 'Inter', 'Noto Serif TC', serif;
+            overflow: hidden;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+
+        /* 漸顯動畫 */
+        .fade-in {
+            opacity: 0;
+            transform: translateY(20px);
+            transition: all 1.2s cubic-bezier(0.22, 1, 0.36, 1);
+        }
+
+        .fade-in.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        /* 裝飾線條 */
+        .divider {
+            width: 0;
+            height: 1px;
+            background-color: var(--accent);
+            margin: 2rem 0;
+            transition: width 1.5s ease-in-out;
+        }
+
+        .divider.active {
+            width: 60px;
+        }
+
+        /* 按鈕風格 */
+        .cta-link {
+            position: relative;
+            font-weight: 300;
+            letter-spacing: 0.1em;
+            padding: 10px 0;
+            transition: color 0.3s ease;
+        }
+
+        .cta-link::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 0;
+            height: 1px;
+            background-color: var(--accent);
+            transition: width 0.3s ease;
+        }
+
+        .cta-link:hover::after {
+            width: 100%;
+        }
+
+        /* 滑鼠跟隨效果 */
+        #cursor-dot {
+            width: 8px;
+            height: 8px;
+            background: black;
+            position: fixed;
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 9999;
+            transition: transform 0.1s ease;
+            display: none;
+        }
+
+        @media (pointer: fine) {
+            #cursor-dot { display: block; }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="cursor-dot"></div>
+
+    <main class="text-center px-6">
+        <header>
+            <h1 class="fade-in text-4xl md:text-6xl font-light tracking-widest mb-2" id="main-title">
+                SERENITY
+            </h1>
+            <p class="fade-in text-sm md:text-base text-gray-500 tracking-[0.3em] font-light uppercase">
+                Explore the Void
+            </p>
+        </header>
+
+        <div class="flex justify-center">
+            <div class="divider" id="line"></div>
+        </div>
+
+        <section class="fade-in mb-12">
+            <p class="text-secondary leading-loose max-w-xs mx-auto text-sm">
+                沈浸於純粹的視覺體驗<br>
+                在極簡中發現無限可能
+            </p>
+        </section>
+
+        <nav class="fade-in">
+            <a href="game_lobby.html" class="cta-link text-lg uppercase">
+                進入遊戲大廳
+            </a>
+        </nav>
+    </main>
+
+    <footer class="fixed bottom-8 w-full text-center fade-in text-[10px] tracking-widest text-gray-400">
+        &copy; 2024 MINIMALISM. ALL RIGHTS RESERVED.
+    </footer>
+
+    <script>
+        window.onload = () => {
+            // 逐一觸發動畫
+            const elements = document.querySelectorAll('.fade-in');
+            elements.forEach((el, index) => {
+                setTimeout(() => {
+                    el.classList.add('visible');
+                }, 200 * (index + 1));
+            });
+
+            // 線條動畫
+            setTimeout(() => {
+                document.getElementById('line').classList.add('active');
+            }, 800);
+
+            // 滑鼠跟隨
+            const dot = document.getElementById('cursor-dot');
+            document.addEventListener('mousemove', (e) => {
+                dot.style.left = e.clientX + 'px';
+                dot.style.top = e.clientY + 'px';
+            });
+
+            // 點擊轉場效果
+            const link = document.querySelector('.cta-link');
+            link.onclick = (e) => {
+                e.preventDefault();
+                document.body.style.opacity = '0';
+                document.body.style.transition = 'opacity 0.8s ease';
+                setTimeout(() => {
+                    window.location.href = link.getAttribute('href');
+                }, 800);
+            };
+        };
+    </script>
+</body>
+</html>
